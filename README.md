@@ -40,3 +40,13 @@ terminates an existing instance
 3. event watcher to run ssm run command to setup a drual site using composer and drush
 
 4. change the database password to a secure version in parameter store or secrets manager
+
+5. add load balancer
+
+6. add RDS 
+
+7. add EFS
+
+8. add ElastiCache memcachd
+
+9. create VPC with public and private subnets
