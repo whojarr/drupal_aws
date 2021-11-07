@@ -1,5 +1,31 @@
 import boto3
 
+class DrupalSecurityGroup(object):
+    '''
+    class to create a drupal ec2 security group
+    '''
+    def __init__(self, security_group_id=None, name="drupal9_security_group", region="ap-southeast-2"):
+        '''
+        Constructor
+        '''
+        self.security_group_id = security_group_id
+        self.name = name
+        self.region = region
+
+
+    def create(self):
+        pass
+
+
+
+    def exists(self):
+        '''
+        look for a security group with the tags Name:drupal9_security_group Product:Drupal Version:9
+        '''
+        
+        return True
+
+
 class DrupalServer(object):
     '''
     class to create a drupal ec2 instance
@@ -120,6 +146,10 @@ ln -s /usr/local/bin/composer /usr/bin/composer
         self.instance_id = instances["Instances"][0]["InstanceId"]
 
         return self.instance_id
+
+
+    def exists(self):
+        return True
 
 
     def stop(self):
