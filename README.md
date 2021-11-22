@@ -33,20 +33,18 @@ terminates an existing instance
 
 ## TODO:
 
-1. create security group
+* create instance role for ssm agent
 
-2. create instance role for ssm agent
+* event watcher to run ssm run command to setup a drual site using composer and drush
 
-3. event watcher to run ssm run command to setup a drual site using composer and drush
+* change the database password to a secure version in parameter store or secrets manager
 
-4. change the database password to a secure version in parameter store or secrets manager
+* add load balancer
 
-5. add load balancer
+* add RDS 
 
-6. add RDS 
+* add EFS
 
-7. add EFS
+* add ElastiCache memcachd
 
-8. add ElastiCache memcachd
-
-9. create VPC with public and private subnets
+* create VPC with public and private subnets

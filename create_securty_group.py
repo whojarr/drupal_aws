@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import ec2
 
 security_group = ec2.DrupalSecurityGroup()
