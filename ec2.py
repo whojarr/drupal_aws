@@ -108,55 +108,121 @@ class DrupalServer(object):
         self.instance_type = instance_type
         self.region = region
         self.ec2_client = boto3.client("ec2", region_name=self.region)
-        self.user_data = '''#!/bin/bash
-yum update -y
-amazon-linux-extras install -y php7.3
-amazon-linux-extras install -y mariadb10.5
-yum install -y httpd mariadb-server git php-xml php-gd php-mbstring mod_ssl httpd-itk
+        self.user_data = self.cloud_init_cmd()
 
-sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
-sudo systemctl enable amazon-ssm-agent
-sudo systemctl start amazon-ssm-agent
 
-systemctl start httpd
-systemctl enable httpd
-cd /etc/pki/tls/certs
-./make-dummy-cert localhost.crt
-cd ~
-sed -i -e 's/SSLCertificateKeyFile/#SSLCertificateKeyFile/g' /etc/httpd/conf.d/ssl.conf
-sed -i -e 's/LoadModule mpm_prefork_module/#LoadModule mpm_prefork_module/g' /etc/httpd/conf.modules.d/00-mpm.conf
-sed -i -e 's/#LoadModule mpm_event_module/LoadModule mpm_event_module/g' /etc/httpd/conf.modules.d/00-mpm.conf
-systemctl stop httpd
-systemctl start httpd
+        #"mysql -e \"ALTER USER 'root'@'localhost' IDENTIFIED BY 'CHANGEME';\"",
+        #"mysql -e \"DROP DATABASE IF EXISTS test\"",
+        #"mysql -e \"FLUSH PRIVILEGES\"",
 
-cd /var/www/html/
-wget https://files.phpmyadmin.net/phpMyAdmin/5.1.1/phpMyAdmin-5.1.1-all-languages.zip
-unzip phpMyAdmin-5.1.1-all-languages.zip
-mv phpMyAdmin-5.1.1-all-languages phpMyAdmin
-cd ~
 
-usermod -a -G apache ec2-user
-chown -R ec2-user:apache /var/www
-chmod 2775 /var/www
+    def drupal_apache_conf(self):
 
-find /var/www -type d -exec chmod 2775 {} \;
-find /var/www -type f -exec chmod 0664 {} \;
+        conf = """
+<VirtualHost *:80>
+    ServerAdmin  dhunter@digitalcreation.co.nz
+    ServerName  drupal9.pauanui.nz
+    ServerAlias www.drupal9.pauanui.nz
+    DocumentRoot /var/www/drupal/web
+    <Directory /var/www/drupal/web>
+        Options -Indexes -MultiViews +FollowSymLinks
+        AllowOverride All
+        Order allow,deny
+        allow from all
+    </Directory>
+    LogLevel warn
+    ErrorLog /var/log/httpd/drupal-error.log
+    CustomLog /var/log/httpd/drupal-access.log combined
+</VirtualHost>
+ServerSignature Off
+ServerTokens Prod
+"""
 
-systemctl start mariadb
-systemctl enable mariadb
+        return conf
 
-mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'CHANGEME';"
-mysql -e "DROP DATABASE IF EXISTS test"
-mysql -e "FLUSH PRIVILEGES"
 
-systemctl stop mariadb
-systemctl start mariadb
+    def cloud_init_cmd(self):
+        cmds = [
+            "#!/bin/bash",
+            "yum update -y",
+            "amazon-linux-extras install -y php7.3",
+            "amazon-linux-extras install -y mariadb10.5",
+            "yum install -y httpd mariadb-server git php-cli php-common php-pdo php-mysqlnd php-xml php-gd php-mbstring php-fpm php-opcache php-pecl-memcached php-pecl-apcu mod_ssl httpd-itk",
+            "sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm",
+            "sudo systemctl enable amazon-ssm-agent",
+            "sudo systemctl start amazon-ssm-agent",
 
-curl -sS https://getcomposer.org/installer | sudo php
-mv composer.phar /usr/local/bin/composer
-ln -s /usr/local/bin/composer /usr/bin/composer
+            "systemctl start mariadb",
+            "systemctl enable mariadb",
 
-'''
+
+            "mysql -e \"CREATE DATABASE IF NOT EXISTS drupal9 CHARACTER SET UTF8 COLLATE utf8_general_ci;\"",
+            "mysql -e \"GRANT ALL ON drupal9.* TO 'drupal'@'%' IDENTIFIED BY 'drup4lp4ssw0rd';\"",
+
+            "cd /etc/httpd/conf.d/",
+            "rm -f autoindex.conf notrace.conf userdir.conf welcome.conf",
+            "echo \"" + self.drupal_apache_conf() + "\" > /etc/httpd/conf.d/drupal.conf",
+            "cd ~",
+
+            "systemctl start httpd",
+            "systemctl enable httpd",
+            "cd /etc/pki/tls/certs",
+            "./make-dummy-cert localhost.crt",
+            "cd ~",
+            "sed -i -e 's/SSLCertificateKeyFile/#SSLCertificateKeyFile/g' /etc/httpd/conf.d/ssl.conf",
+            "sed -i -e 's/LoadModule mpm_prefork_module/#LoadModule mpm_prefork_module/g' /etc/httpd/conf.modules.d/00-mpm.conf",
+            "sed -i -e 's/#LoadModule mpm_event_module/LoadModule mpm_event_module/g' /etc/httpd/conf.modules.d/00-mpm.conf",
+
+ 
+            "systemctl stop httpd",
+            "systemctl start httpd",
+
+            "cd /var/www/html/",
+            "wget https://files.phpmyadmin.net/phpMyAdmin/5.1.1/phpMyAdmin-5.1.1-all-languages.zip",
+            "unzip phpMyAdmin-5.1.1-all-languages.zip",
+            "mv phpMyAdmin-5.1.1-all-languages phpMyAdmin",
+            "cd ~",
+
+            "usermod -a -G apache ec2-user",
+            "chown -R ec2-user:apache /var/www",
+            "chmod 2775 /var/www",
+
+            "find /var/www -type d -exec chmod 2775 {} \;",
+            "find /var/www -type f -exec chmod 0664 {} \;",
+
+
+            "systemctl stop mariadb",
+            "systemctl start mariadb",
+
+
+            "export HOME=/root",
+            "export DRUSH_PHP=/usr/bin/php",
+            "cd /root/",
+            "sed -i 's/allow_url_fopen = Off/allow_url_fopen = On/g' /etc/php.ini",
+            "curl -sS https://getcomposer.org/installer | php",
+
+            "mv composer.phar /usr/local/bin/composer",
+            "ln -s /usr/local/bin/composer /usr/bin/composer",
+            "/usr/bin/composer global require drush/drush:10.*",
+            "/usr/bin/composer create-project drupal/recommended-project:9.* drupal",
+            "sed -i 's/allow_url_fopen = On/allow_url_fopen = Off/g' /etc/php.ini",
+            "sed -i 's/expose_php = On/expose_php = Off/g' /etc/php.ini",
+            "sed -i 's/memory_limit = 128M/memory_limit = -1/g' /etc/php.ini",
+            "cd /root/drupal",
+            "/usr/bin/composer require drush/drush:^10",
+            "cd /root",
+            "mv /root/drupal /var/www/drupal",
+            "cd /var/www/drupal",
+            "/var/www/drupal/vendor/bin/drush site-install standard --yes --site-name=drupal9  --site-mail=dhunter@digitalcreation.co.nz --account-name=admin --account-pass=l3tm31n --db-url=mysql://drupal:drup4lp4ssw0rd@localhost/drupal9 --db-prefix=drupal_",
+            "cd /var/www/drupal/web/sites/default",
+            "echo \"\$_SERVER['HTTPS'] = 'On';\" >> settings.php",
+            "chown -R ec2-user:apache /var/www/drupal",
+            "chmod -R 750 /var/www/drupal",
+            "chmod -R 770 /var/www/drupal/web/sites/default/files",
+        ]
+        result = '\n'.join(cmds)
+
+        return result
 
 
     def create(self):
